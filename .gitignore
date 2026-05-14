@@ -1,0 +1,39 @@
+# Build directories
+build/
+cmake-build-*/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Dependencies
+vcpkg_installed/
+conan/
+
+# Generated shader files
+shaders/*.spv
+shaders/*.o
+
+# Executables
+GreatWarGPU
+GreatWarGPU.exe
+
+# Logs
+*.log

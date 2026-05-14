@@ -1,0 +1,101 @@
+#version 460
+#extension GL_KHR_memory_scope_semantics : enable
+#extension GL_EXT_shader_atomic_int64 : enable
+
+layout(local_size_x = 256) in;
+
+// Constants
+const vec2 RED_CAPITAL = vec2(-0.95, 0.0);
+const vec2 BLUE_CAPITAL = vec2(0.95, 0.0);
+const float REPULSION_RADIUS = 0.02;
+const float REPULSION_STRENGTH = 0.5;
+const float GOAL_SEEK_STRENGTH = 0.3;
+const float MAX_VELOCITY = 0.5;
+const float DAMPING = 0.95;
+const float DT = 0.016; // 60 FPS
+const float SPAWN_INTERVAL = 0.5; // Controls spawn rate
+
+struct Soldier {
+    vec2 position;
+    vec2 velocity;
+    int team;       // 0 = Red, 1 = Blue
+    int _pad;
+};
+
+layout(std430, binding = 0) buffer SoldierBuffer {
+    Soldier soldiers[];
+};
+
+layout(std430, binding = 1) buffer AtomicCounterBuffer {
+    uint current_active_soldiers;
+};
+
+layout(std430, binding = 2) buffer FrameBuffer {
+    uint frame_counter;
+};
+
+void main() {
+    uint gid = gl_GlobalInvocationID.x;
+    
+    // Only spawn a subset per frame to avoid GPU saturation
+    uint max_soldiers = min(1000000u, current_active_soldiers);
+    if (gid >= max_soldiers) {
+        return;
+    }
+    
+    Soldier soldier = soldiers[gid];
+    
+    // === SPAWNING ===
+    // If this soldier hasn't been initialized, spawn it
+    if (soldier.position == vec2(0.0)) {
+        soldier.team = (gid % 2u == 0u) ? 0 : 1;
+        soldier.velocity = vec2(0.0);
+        
+        if (soldier.team == 0) {
+            // Red spawns near left capital with small offset
+            soldier.position = RED_CAPITAL + vec2(0.01 * sin(float(gid)), 0.01 * cos(float(gid)));
+        } else {
+            // Blue spawns near right capital with small offset
+            soldier.position = BLUE_CAPITAL + vec2(-0.01 * sin(float(gid)), 0.01 * cos(float(gid)));
+        }
+    }
+    
+    // === GOAL SEEKING ===
+    vec2 goal = (soldier.team == 0) ? BLUE_CAPITAL : RED_CAPITAL;
+    vec2 to_goal = normalize(goal - soldier.position);
+    soldier.velocity += to_goal * GOAL_SEEK_STRENGTH;
+    
+    // === REPULSION / COLLISION AVOIDANCE ===
+    // Simplified: Check only nearby soldiers within a fixed radius
+    vec2 repulsion = vec2(0.0);
+    
+    for (uint i = 0u; i < min(max_soldiers, 100u); i++) {
+        if (i == gid) continue;
+        
+        Soldier other = soldiers[i];
+        vec2 diff = soldier.position - other.position;
+        float dist = length(diff);
+        
+        if (dist > 0.001 && dist < REPULSION_RADIUS) {
+            repulsion += normalize(diff) * (1.0 - dist / REPULSION_RADIUS) * REPULSION_STRENGTH;
+        }
+    }
+    
+    soldier.velocity += repulsion;
+    
+    // Clamp velocity
+    float vel_mag = length(soldier.velocity);
+    if (vel_mag > MAX_VELOCITY) {
+        soldier.velocity = (soldier.velocity / vel_mag) * MAX_VELOCITY;
+    }
+    
+    // === INTEGRATION ===
+    soldier.position += soldier.velocity * DT;
+    soldier.velocity *= DAMPING;
+    
+    // === BOUNDARY CONSTRAINTS ===
+    soldier.position = clamp(soldier.position, vec2(-1.0), vec2(1.0));
+    
+    // Write back
+    soldiers[gid] = soldier;
+}
