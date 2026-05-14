@@ -27,6 +27,23 @@ struct FrameContext {
     vk::Fence in_flight_fence;
 };
 
+struct CameraPushConstants {
+    float center_x = 0.0f;
+    float center_y = 0.0f;
+    float scale_x = 1.0f;
+    float scale_y = 1.0f;
+    float point_size = 1.0f;
+    float padding[3] = {0.0f, 0.0f, 0.0f};
+};
+
+struct CameraState {
+    float center_x = 0.0f;
+    float center_y = 0.0f;
+    float zoom = 1.0f;       // pixels per meter
+    float min_zoom = 0.001f;  // fits the whole map
+    float max_zoom = 8192.0f;
+};
+
 // === RENDER STATE ===
 struct CrowdSimulationBenchmark {
     // Window
@@ -82,5 +99,6 @@ struct CrowdSimulationBenchmark {
     uint32_t max_soldiers = 1000000;        // 1 million max
     uint32_t current_active_soldiers = 0;   // Start at 0
     float spawn_rate = 10000.0f;            // 10k/sec (gradual buildup)
+    CameraState camera;
     bool running = true;
 };

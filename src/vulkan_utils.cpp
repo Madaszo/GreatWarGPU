@@ -272,6 +272,12 @@ void createGraphicsPipeline(CrowdSimulationBenchmark& bench,
     } else {
         layout_info.setLayoutCount = 0;
     }
+    vk::PushConstantRange camera_push_constant{};
+    camera_push_constant.stageFlags = vk::ShaderStageFlagBits::eVertex;
+    camera_push_constant.offset = 0;
+    camera_push_constant.size = sizeof(CameraPushConstants);
+    layout_info.pushConstantRangeCount = 1;
+    layout_info.pPushConstantRanges = &camera_push_constant;
     bench.graphics_pipeline_layout = bench.device.createPipelineLayout(layout_info);
     
     // Create graphics pipeline

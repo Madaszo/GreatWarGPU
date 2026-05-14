@@ -5,15 +5,29 @@
 layout(local_size_x = 256) in;
 
 // Constants
-const vec2 RED_CAPITAL = vec2(-0.95, 0.0);
-const vec2 BLUE_CAPITAL = vec2(0.95, 0.0);
-const float REPULSION_RADIUS = 0.02;
+const float MAP_MIN_LON = -10.0;
+const float MAP_MIN_LAT = 35.0;
+const float MAP_MAX_LON = 20.0;
+const float MAP_MAX_LAT = 60.0;
+const float METERS_PER_DEG_LAT = 111320.0;
+const float METERS_PER_DEG_LON = 71400.0; // Approximate around 50N
+const vec2 MAP_MIN = vec2(0.0, 0.0);
+const vec2 MAP_MAX = vec2((MAP_MAX_LON - MAP_MIN_LON) * METERS_PER_DEG_LON,
+                          (MAP_MAX_LAT - MAP_MIN_LAT) * METERS_PER_DEG_LAT);
+const vec2 PARIS = vec2((-2.3522 - MAP_MIN_LON) * METERS_PER_DEG_LON,
+                        (48.8566 - MAP_MIN_LAT) * METERS_PER_DEG_LAT);
+const vec2 BERLIN = vec2((13.4050 - MAP_MIN_LON) * METERS_PER_DEG_LON,
+                         (52.5200 - MAP_MIN_LAT) * METERS_PER_DEG_LAT);
+const vec2 RED_CAPITAL = PARIS;
+const vec2 BLUE_CAPITAL = BERLIN;
+const float REPULSION_RADIUS = 12.0;
 const float REPULSION_STRENGTH = 0.5;
-const float GOAL_SEEK_STRENGTH = 0.3;
-const float MAX_VELOCITY = 0.5;
-const float DAMPING = 0.95;
+const float WALK_SPEED = 1.0; // meters per second
+const float MAX_VELOCITY = 1.0;
+const float DAMPING = 0.98;
 const float DT = 0.016; // 60 FPS
 const float SPAWN_INTERVAL = 0.5; // Controls spawn rate
+const float SPAWN_JITTER_RADIUS = 2500.0;
 
 struct Soldier {
     vec2 position;
@@ -34,6 +48,22 @@ layout(std430, binding = 2) buffer FrameBuffer {
     uint frame_counter;
 };
 
+float hash11(uint n) {
+    n ^= 2747636419u;
+    n *= 2654435769u;
+    n ^= n >> 16;
+    n *= 2654435769u;
+    n ^= n >> 16;
+    n *= 2654435769u;
+    return float(n) / 4294967295.0;
+}
+
+vec2 spawnJitter(uint gid, uint frameSeed) {
+    float angle = hash11(gid * 1664525u + frameSeed * 1013904223u) * 6.28318530718;
+    float radius = sqrt(hash11(gid * 22695477u + frameSeed + 1u)) * SPAWN_JITTER_RADIUS;
+    return vec2(cos(angle), sin(angle)) * radius;
+}
+
 void main() {
     uint gid = gl_GlobalInvocationID.x;
     
@@ -52,18 +82,22 @@ void main() {
         soldier.velocity = vec2(0.0);
         
         if (soldier.team == 0) {
-            // Red spawns near left capital with small offset
-            soldier.position = RED_CAPITAL + vec2(0.01 * sin(float(gid)), 0.01 * cos(float(gid)));
+            // Red spawns near left capital with random jitter
+            soldier.position = RED_CAPITAL + spawnJitter(gid, frame_counter);
         } else {
-            // Blue spawns near right capital with small offset
-            soldier.position = BLUE_CAPITAL + vec2(-0.01 * sin(float(gid)), 0.01 * cos(float(gid)));
+            // Blue spawns near right capital with random jitter
+            soldier.position = BLUE_CAPITAL + spawnJitter(gid ^ 0x9e3779b9u, frame_counter ^ 0x85ebca6bu);
         }
     }
     
     // === GOAL SEEKING ===
     vec2 goal = (soldier.team == 0) ? BLUE_CAPITAL : RED_CAPITAL;
-    vec2 to_goal = normalize(goal - soldier.position);
-    soldier.velocity += to_goal * GOAL_SEEK_STRENGTH;
+    vec2 to_goal = goal - soldier.position;
+    float goal_dist = length(to_goal);
+    if (goal_dist > 0.0001) {
+        vec2 desired_velocity = (to_goal / goal_dist) * WALK_SPEED;
+        soldier.velocity = mix(soldier.velocity, desired_velocity, 0.15);
+    }
     
     // === REPULSION / COLLISION AVOIDANCE ===
     // Simplified: Check only nearby soldiers within a fixed radius
@@ -94,7 +128,7 @@ void main() {
     soldier.velocity *= DAMPING;
     
     // === BOUNDARY CONSTRAINTS ===
-    soldier.position = clamp(soldier.position, vec2(-1.0), vec2(1.0));
+    soldier.position = clamp(soldier.position, MAP_MIN, MAP_MAX);
     
     // Write back
     soldiers[gid] = soldier;

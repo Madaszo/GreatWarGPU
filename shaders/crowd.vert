@@ -7,6 +7,12 @@ struct Soldier {
     int _pad;
 };
 
+layout(push_constant) uniform CameraPushConstants {
+    vec2 center;
+    vec2 scale;
+    float pointSize;
+} camera;
+
 layout(std430, binding = 0) buffer SoldierBuffer {
     Soldier soldiers[];
 };
@@ -16,8 +22,10 @@ layout(location = 0) out vec3 outColor;
 void main() {
     Soldier soldier = soldiers[gl_VertexIndex];
     
-    gl_Position = vec4(soldier.position, 0.0, 1.0);
-    gl_PointSize = 5.0;
+    vec2 ndc = (soldier.position - camera.center) * camera.scale;
+
+    gl_Position = vec4(ndc, 0.0, 1.0);
+    gl_PointSize = max(1.0, camera.pointSize);
     
     // Red team = vec3(1, 0, 0), Blue team = vec3(0, 0, 1)
     outColor = (soldier.team == 0) ? vec3(1.0, 0.2, 0.2) : vec3(0.2, 0.2, 1.0);

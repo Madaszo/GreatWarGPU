@@ -10,12 +10,100 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <algorithm>
 #include <chrono>
 
 // Forward declarations (implemented in vulkan_init.cpp)
 void initializeVulkan(CrowdSimulationBenchmark& bench);
 std::vector<char> readShaderFile(const std::string& filename);
 void cleanupVulkan(CrowdSimulationBenchmark& bench);
+
+namespace {
+constexpr float MAP_MIN_LON = -10.0f;
+constexpr float MAP_MIN_LAT = 35.0f;
+constexpr float MAP_MAX_LON = 20.0f;
+constexpr float MAP_MAX_LAT = 60.0f;
+constexpr float METERS_PER_DEG_LAT = 111320.0f;
+constexpr float METERS_PER_DEG_LON = 71400.0f;
+constexpr float PAN_SPEED_METERS_PER_SECOND = 8000.0f;
+
+const float MAP_WIDTH_METERS = (MAP_MAX_LON - MAP_MIN_LON) * METERS_PER_DEG_LON;
+const float MAP_HEIGHT_METERS = (MAP_MAX_LAT - MAP_MIN_LAT) * METERS_PER_DEG_LAT;
+
+void clampCameraToMap(CrowdSimulationBenchmark& bench) {
+    const float half_width = 0.5f * static_cast<float>(bench.window_width) / bench.camera.zoom;
+    const float half_height = 0.5f * static_cast<float>(bench.window_height) / bench.camera.zoom;
+
+    const float min_center_x = half_width;
+    const float max_center_x = MAP_WIDTH_METERS - half_width;
+    const float min_center_y = half_height;
+    const float max_center_y = MAP_HEIGHT_METERS - half_height;
+
+    if (min_center_x <= max_center_x) {
+        bench.camera.center_x = std::clamp(bench.camera.center_x, min_center_x, max_center_x);
+    } else {
+        bench.camera.center_x = MAP_WIDTH_METERS * 0.5f;
+    }
+
+    if (min_center_y <= max_center_y) {
+        bench.camera.center_y = std::clamp(bench.camera.center_y, min_center_y, max_center_y);
+    } else {
+        bench.camera.center_y = MAP_HEIGHT_METERS * 0.5f;
+    }
+}
+}
+
+static void updateCameraInput(CrowdSimulationBenchmark& bench) {
+    const float zoom_step = 1.05f;
+    const float delta_time = 0.016f;
+    const float pan_step = PAN_SPEED_METERS_PER_SECOND * delta_time / std::max(bench.camera.zoom, 0.001f);
+
+    if (glfwGetKey(bench.window, GLFW_KEY_EQUAL) == GLFW_PRESS ||
+        glfwGetKey(bench.window, GLFW_KEY_KP_ADD) == GLFW_PRESS) {
+        bench.camera.zoom *= zoom_step;
+    }
+
+    if (glfwGetKey(bench.window, GLFW_KEY_MINUS) == GLFW_PRESS ||
+        glfwGetKey(bench.window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS) {
+        bench.camera.zoom /= zoom_step;
+    }
+
+    if (glfwGetKey(bench.window, GLFW_KEY_W) == GLFW_PRESS ||
+        glfwGetKey(bench.window, GLFW_KEY_UP) == GLFW_PRESS) {
+        bench.camera.center_y += pan_step;
+    }
+
+    if (glfwGetKey(bench.window, GLFW_KEY_S) == GLFW_PRESS ||
+        glfwGetKey(bench.window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+        bench.camera.center_y -= pan_step;
+    }
+
+    if (glfwGetKey(bench.window, GLFW_KEY_A) == GLFW_PRESS ||
+        glfwGetKey(bench.window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+        bench.camera.center_x -= pan_step;
+    }
+
+    if (glfwGetKey(bench.window, GLFW_KEY_D) == GLFW_PRESS ||
+        glfwGetKey(bench.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+        bench.camera.center_x += pan_step;
+    }
+
+    bench.camera.zoom = std::clamp(bench.camera.zoom, bench.camera.min_zoom, bench.camera.max_zoom);
+    clampCameraToMap(bench);
+}
+
+static void scrollCallback(GLFWwindow* window, double, double yoffset) {
+    auto* bench = static_cast<CrowdSimulationBenchmark*>(glfwGetWindowUserPointer(window));
+    if (!bench || yoffset == 0.0) {
+        return;
+    }
+
+    const float zoom_factor = (yoffset > 0.0) ? 1.12f : (1.0f / 1.12f);
+    bench->camera.zoom = std::clamp(bench->camera.zoom * zoom_factor,
+                                    bench->camera.min_zoom,
+                                    bench->camera.max_zoom);
+        clampCameraToMap(*bench);
+}
 
 // === SHADER FILE LOADING ===
 std::vector<char> readShaderFile(const std::string& filename) {
@@ -42,6 +130,7 @@ void executeRenderLoop(CrowdSimulationBenchmark& bench) {
     
     while (bench.running && !glfwWindowShouldClose(bench.window)) {
         glfwPollEvents();
+        updateCameraInput(bench);
         
         FrameContext& frame = bench.frames[bench.current_frame];
         
@@ -122,6 +211,20 @@ void executeRenderLoop(CrowdSimulationBenchmark& bench) {
         frame.command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                                 bench.graphics_pipeline_layout,
                                                 0, bench.compute_descriptor_set, nullptr);
+
+        CameraPushConstants camera_constants{};
+        camera_constants.center_x = bench.camera.center_x;
+        camera_constants.center_y = bench.camera.center_y;
+        camera_constants.scale_x = (2.0f * bench.camera.zoom) / static_cast<float>(bench.swapchain_extent.width);
+        camera_constants.scale_y = (2.0f * bench.camera.zoom) / static_cast<float>(bench.swapchain_extent.height);
+        camera_constants.point_size = bench.camera.zoom;
+
+        frame.command_buffer.pushConstants(
+            bench.graphics_pipeline_layout,
+            vk::ShaderStageFlagBits::eVertex,
+            0,
+            sizeof(CameraPushConstants),
+            &camera_constants);
         
         vk::Viewport viewport{0.0f, 0.0f, 
                              static_cast<float>(bench.swapchain_extent.width),
@@ -210,6 +313,18 @@ int main(int argc, char* argv[]) {
             glfwTerminate();
             return 1;
         }
+
+        glfwSetWindowUserPointer(bench.window, &bench);
+        glfwSetScrollCallback(bench.window, scrollCallback);
+
+        bench.camera.center_x = MAP_WIDTH_METERS * 0.5f;
+        bench.camera.center_y = MAP_HEIGHT_METERS * 0.5f;
+        bench.camera.min_zoom = std::min(
+            static_cast<float>(bench.window_width) / MAP_WIDTH_METERS,
+            static_cast<float>(bench.window_height) / MAP_HEIGHT_METERS);
+        bench.camera.zoom = bench.camera.min_zoom;
+        bench.camera.max_zoom = 8192.0f;
+        clampCameraToMap(bench);
         
         std::cout << "Initializing Vulkan..." << std::endl;
         initializeVulkan(bench);
