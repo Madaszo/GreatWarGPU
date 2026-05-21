@@ -1,3 +1,12 @@
+#include "greatwar/render/Renderer.hpp"
+
+namespace greatwar {
+
+void Renderer::initialize() {}
+void Renderer::render(const RenderSnapshot&, const Camera&) {}
+void Renderer::shutdown() {}
+
+} // namespace greatwar
 #include "greatwargpu/render/Renderer.hpp"
 #include "greatwargpu/gpu/GPUContext.hpp"
 #include "greatwargpu/simulation/Simulation.hpp"

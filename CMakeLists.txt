@@ -97,6 +97,56 @@ add_library(GreatWarGPUCore STATIC
     ${ARCHITECTURE_HEADERS}
 )
 
+# New GreatWar architecture (attachment layout)
+set(GREATWAR_HEADERS
+    include/greatwar/simulation/Simulation.hpp
+    include/greatwar/simulation/Grid.hpp
+    include/greatwar/simulation/WorldState.hpp
+    include/greatwar/simulation/Tick.hpp
+
+    include/greatwar/commands/CommandHierarchy.hpp
+    include/greatwar/commands/Command.hpp
+    include/greatwar/commands/CommandBuffer.hpp
+
+    include/greatwar/gpu/GPUContext.hpp
+    include/greatwar/gpu/TacticalExecutor.hpp
+    include/greatwar/gpu/BufferSet.hpp
+
+    include/greatwar/render/Renderer.hpp
+    include/greatwar/render/Camera.hpp
+    include/greatwar/render/RenderSnapshot.hpp
+
+    include/greatwar/app/Application.hpp
+)
+
+set(GREATWAR_SOURCES
+    src/simulation/Simulation.cpp
+    src/simulation/Grid.cpp
+    src/simulation/WorldState.cpp
+
+    src/commands/CommandHierarchy.cpp
+    src/commands/CommandBuffer.cpp
+
+    src/gpu/GPUContext.cpp
+    src/gpu/TacticalExecutor.cpp
+
+    src/render/Renderer.cpp
+    src/render/Camera.cpp
+
+    src/app/Application.cpp
+)
+
+add_library(GreatWarCore STATIC
+    ${GREATWAR_SOURCES}
+    ${GREATWAR_HEADERS}
+)
+
+target_include_directories(GreatWarCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_features(GreatWarCore PUBLIC cxx_std_20)
+
 target_include_directories(GreatWarGPUCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
@@ -117,6 +167,7 @@ target_include_directories(GreatWarGPU PRIVATE
 # Link libraries
 target_link_libraries(GreatWarGPU PRIVATE
     GreatWarGPUCore
+    GreatWarCore
     Vulkan::Vulkan
     glfw
     glm::glm)

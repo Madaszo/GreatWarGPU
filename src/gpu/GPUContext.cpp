@@ -1,3 +1,11 @@
+#include "greatwar/gpu/GPUContext.hpp"
+
+namespace greatwar {
+
+void GPUContext::initialize() { ready_ = true; }
+void GPUContext::shutdown() { ready_ = false; }
+
+} // namespace greatwar
 #include "greatwargpu/gpu/GPUContext.hpp"
 
 namespace gwgpu {
