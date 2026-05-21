@@ -25,7 +25,7 @@ void main() {
     vec2 ndc = (soldier.position - camera.center) * camera.scale;
 
     gl_Position = vec4(ndc, 0.0, 1.0);
-    gl_PointSize = max(1.0, camera.pointSize);
+    gl_PointSize = clamp(camera.pointSize * 0.05, 1.0, 6.0);
     
     // Red team = vec3(1, 0, 0), Blue team = vec3(0, 0, 1)
     outColor = (soldier.team == 0) ? vec3(1.0, 0.2, 0.2) : vec3(0.2, 0.2, 1.0);

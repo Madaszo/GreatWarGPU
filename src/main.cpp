@@ -30,6 +30,20 @@ constexpr float PAN_SPEED_METERS_PER_SECOND = 8000.0f;
 const float MAP_WIDTH_METERS = (MAP_MAX_LON - MAP_MIN_LON) * METERS_PER_DEG_LON;
 const float MAP_HEIGHT_METERS = (MAP_MAX_LAT - MAP_MIN_LAT) * METERS_PER_DEG_LAT;
 
+void clampCameraToMap(CrowdSimulationBenchmark& bench);
+
+void focusCameraOnFront(CrowdSimulationBenchmark& bench) {
+    constexpr float PARIS_X = (-2.3522f - MAP_MIN_LON) * METERS_PER_DEG_LON;
+    constexpr float PARIS_Y = (48.8566f - MAP_MIN_LAT) * METERS_PER_DEG_LAT;
+    constexpr float BERLIN_X = (13.4050f - MAP_MIN_LON) * METERS_PER_DEG_LON;
+    constexpr float BERLIN_Y = (52.5200f - MAP_MIN_LAT) * METERS_PER_DEG_LAT;
+
+    bench.camera.center_x = 0.5f * (PARIS_X + BERLIN_X);
+    bench.camera.center_y = 0.5f * (PARIS_Y + BERLIN_Y);
+    bench.camera.zoom = std::max(0.5f, bench.camera.min_zoom);
+    clampCameraToMap(bench);
+}
+
 void clampCameraToMap(CrowdSimulationBenchmark& bench) {
     const float half_width = 0.5f * static_cast<float>(bench.window_width) / bench.camera.zoom;
     const float half_height = 0.5f * static_cast<float>(bench.window_height) / bench.camera.zoom;
@@ -86,6 +100,10 @@ static void updateCameraInput(CrowdSimulationBenchmark& bench) {
     if (glfwGetKey(bench.window, GLFW_KEY_D) == GLFW_PRESS ||
         glfwGetKey(bench.window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
         bench.camera.center_x += pan_step;
+    }
+
+    if (glfwGetKey(bench.window, GLFW_KEY_F) == GLFW_PRESS) {
+        focusCameraOnFront(bench);
     }
 
     bench.camera.zoom = std::clamp(bench.camera.zoom, bench.camera.min_zoom, bench.camera.max_zoom);
@@ -317,12 +335,10 @@ int main(int argc, char* argv[]) {
         glfwSetWindowUserPointer(bench.window, &bench);
         glfwSetScrollCallback(bench.window, scrollCallback);
 
-        bench.camera.center_x = MAP_WIDTH_METERS * 0.5f;
-        bench.camera.center_y = MAP_HEIGHT_METERS * 0.5f;
+        focusCameraOnFront(bench);
         bench.camera.min_zoom = std::min(
             static_cast<float>(bench.window_width) / MAP_WIDTH_METERS,
             static_cast<float>(bench.window_height) / MAP_HEIGHT_METERS);
-        bench.camera.zoom = bench.camera.min_zoom;
         bench.camera.max_zoom = 8192.0f;
         clampCameraToMap(bench);
         

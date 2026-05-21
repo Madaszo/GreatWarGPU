@@ -4,6 +4,11 @@ project(GreatWarGPU)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Prefer the local vcpkg packages if they are installed on this machine.
+if(EXISTS "C:/vcpkg/installed/x64-windows/share")
+    list(APPEND CMAKE_PREFIX_PATH "C:/vcpkg/installed/x64-windows/share")
+endif()
+
 # Find Vulkan
 find_package(Vulkan REQUIRED COMPONENTS glslc glslangValidator)
 
@@ -60,21 +65,46 @@ if(NOT VMA_INCLUDE_DIR)
     endif()
 endif()
 
-# Source files
-set(SOURCES
+# Legacy source files
+set(LEGACY_SOURCES
     src/main.cpp
     src/vulkan_utils.cpp
     src/vulkan_init.cpp
 )
 
-set(HEADERS
+set(LEGACY_HEADERS
     include/soldier.hpp
     include/vulkan_types.hpp
     include/vulkan_utils.hpp
 )
 
+set(ARCHITECTURE_HEADERS
+    include/greatwargpu/command/CommandHierarchy.hpp
+    include/greatwargpu/gpu/GPUContext.hpp
+    include/greatwargpu/render/Renderer.hpp
+    include/greatwargpu/simulation/Simulation.hpp
+)
+
+set(ARCHITECTURE_SOURCES
+    src/command/CommandHierarchy.cpp
+    src/gpu/GPUContext.cpp
+    src/render/Renderer.cpp
+    src/simulation/Simulation.cpp
+)
+
+add_library(GreatWarGPUCore STATIC
+    ${ARCHITECTURE_SOURCES}
+    ${ARCHITECTURE_HEADERS}
+)
+
+target_include_directories(GreatWarGPUCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_features(GreatWarGPUCore PUBLIC cxx_std_20)
+
 # Create executable
-add_executable(GreatWarGPU ${SOURCES} ${HEADERS})
+add_executable(GreatWarGPU ${LEGACY_SOURCES} ${LEGACY_HEADERS})
 
 # Include directories
 target_include_directories(GreatWarGPU PRIVATE
@@ -86,6 +116,7 @@ target_include_directories(GreatWarGPU PRIVATE
 
 # Link libraries
 target_link_libraries(GreatWarGPU PRIVATE
+    GreatWarGPUCore
     Vulkan::Vulkan
     glfw
     glm::glm)

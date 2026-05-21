@@ -27,7 +27,7 @@ const float MAX_VELOCITY = 1.0;
 const float DAMPING = 0.98;
 const float DT = 0.016; // 60 FPS
 const float SPAWN_INTERVAL = 0.5; // Controls spawn rate
-const float SPAWN_JITTER_RADIUS = 2500.0;
+const float SPAWN_JITTER_RADIUS = 250.0;
 
 struct Soldier {
     vec2 position;
@@ -95,8 +95,8 @@ void main() {
     vec2 to_goal = goal - soldier.position;
     float goal_dist = length(to_goal);
     if (goal_dist > 0.0001) {
-        vec2 desired_velocity = (to_goal / goal_dist) * WALK_SPEED;
-        soldier.velocity = mix(soldier.velocity, desired_velocity, 0.15);
+        // Use direct marching so the motion is easy to observe at 1 m/s.
+        soldier.velocity = (to_goal / goal_dist) * WALK_SPEED;
     }
     
     // === REPULSION / COLLISION AVOIDANCE ===
@@ -115,7 +115,7 @@ void main() {
         }
     }
     
-    soldier.velocity += repulsion;
+    soldier.velocity += repulsion * 0.25;
     
     // Clamp velocity
     float vel_mag = length(soldier.velocity);
